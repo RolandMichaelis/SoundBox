@@ -4,10 +4,13 @@
  */
 package de.spas.soundbox;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -18,7 +21,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.MediaStore;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.SeekBar;
@@ -46,6 +49,11 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
     private Uri uri;
     private Cursor cursor;
     private boolean isSDPresent;
+    private int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE=123456789;
+    PowerManager pm;
+    PowerManager.WakeLock wl;
+    private long idMem;
+    private String output;
 
     final String TAG = "MainActivity";
 
@@ -69,9 +77,34 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
         text.setText("Sensitivity: "+String.valueOf(seekbar_value));
         seekBar1.setProgress(seekbar_value);
 
-        ContentResolver contentResolver = getContentResolver();
-        isSDPresent=externalMemoryAvailable();
+        pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        wl =  pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My WakeLock");
+        if(!wl.isHeld())wl.acquire(); //Bildschirm bleibt an!
 
+/*        if (android.os.Build.VERSION.SDK_INT >= 23) {
+
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                // Should we show an explanation?
+                if (shouldShowRequestPermissionRationale(
+                        Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                    // Explain to the user why we need to read the contacts
+                }
+
+                requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
+
+                // MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE is an
+                // app-defined int constant that should be quite unique
+
+                return;
+            }
+        }*/
+        //Toast.makeText(getApplicationContext(),String.valueOf(android.os.Build.VERSION.SDK_INT)+"|"+String.valueOf(MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE), Toast.LENGTH_SHORT).show();
+
+        ContentResolver contentResolver = getContentResolver();
+        //isSDPresent=externalMemoryAvailable();
+        isSDPresent=true;
         if(isSDPresent){uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;}
         else{uri = android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI;}
 
@@ -111,9 +144,10 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
             return state.equals(Environment.MEDIA_MOUNTED) || state.equals(
                     Environment.MEDIA_MOUNTED_READ_ONLY);
         } else {
+            Toast.makeText(getApplicationContext(),"Keine SD Card gefunden!", Toast.LENGTH_SHORT).show();
             //device not support sd card.
             return false;
-        }
+       }
     }
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -185,6 +219,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
         Log.i(TAG, "ID: " + cursor.getLong(idColumn) + " Artist: " + cursor.getString(artistColumn) + " Title: " + cursor.getString(titleColumn) + " Title: " + cursor.getString(titleColumn));
         song.setText(changer+"/"+counter+" Artist: " + cursor.getString(artistColumn) + " Title: " + cursor.getString(titleColumn) + " " + timeMinutes+":"+String.format("%02d",timeSeconds));
 //        song.setText(changer+"/"+counter+" Artist: " + cursor.getString(artistColumn) + " Title: " + cursor.getString(titleColumn) + " " + timeMinutes+":"+String.format("%02d",timeSeconds)+" "+cursor.getString(musicColumn));
+        output=changer+"/"+counter+" Artist: " + cursor.getString(artistColumn) + " Title: " + cursor.getString(titleColumn) + " " + timeMinutes+":"+String.format("%02d",timeSeconds);
 
         try {
             mpMusic = new MediaPlayer();
@@ -217,7 +252,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
 
             @Override
             public boolean onError(MediaPlayer mp, int what, int extra) {
-                Toast.makeText(MainActivity.this, "An terrible error has occurred!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Errror: "+String.valueOf(output), Toast.LENGTH_SHORT).show();
                 return false;
 
             }
@@ -248,6 +283,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
                 e.printStackTrace();
             }
         }
+        if(wl.isHeld())wl.release();
     }
 
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
