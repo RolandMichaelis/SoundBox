@@ -19,9 +19,11 @@ import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.SeekBar;
@@ -29,7 +31,10 @@ import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity implements View.OnClickListener, SensorEventListener, OnSeekBarChangeListener {
 
@@ -108,11 +113,18 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
         if(isSDPresent){uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;}
         else{uri = android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI;}
 
+        String[] STAR = { "*" };
+        String selection = MediaStore.Audio.Media.IS_MUSIC + " != 0";
+        cursor = contentResolver.query(uri, STAR, selection, null, null);
 
-        cursor = contentResolver.query(uri, null, null, null, null);
 
-        Log.i(TAG, "Querying media...");
-        Log.i(TAG, "URI: " + uri.toString());
+        //cursor = managedQuery(allsongsuri, STAR, selection, null, null);
+
+        //String[] columns = new String[]{MediaStore.Audio.AudioColumns.DATA};
+        //cursor = contentResolver.query(uri, columns, null, null, null);
+
+        //Log.i(TAG, "Querying media...");
+        //Log.i(TAG, "URI: " + uri.toString());
 
 
         if (cursor == null) {
@@ -136,6 +148,51 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
 
         playMusic();
 
+        //getAllSongsFromSDCARD();
+    }
+    public void getAllSongsFromSDCARD() {
+        String[] STAR = { "*" };
+        //Cursor cursor;
+        Uri allsongsuri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+        String selection = MediaStore.Audio.Media.IS_MUSIC + " != 0";
+
+        cursor = managedQuery(allsongsuri, STAR, selection, null, null);
+
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                counter=0;
+                do {
+                    String song_name = cursor
+                            .getString(cursor
+                                    .getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME));
+                    int song_id = cursor.getInt(cursor
+                            .getColumnIndex(MediaStore.Audio.Media._ID));
+
+                    String fullpath = cursor.getString(cursor
+                            .getColumnIndex(MediaStore.Audio.Media.DATA));
+
+                    String album_name = cursor.getString(cursor
+                            .getColumnIndex(MediaStore.Audio.Media.ALBUM));
+                    int album_id = cursor.getInt(cursor
+                            .getColumnIndex(MediaStore.Audio.Media.ALBUM_ID));
+
+                    String artist_name = cursor.getString(cursor
+                            .getColumnIndex(MediaStore.Audio.Media.ARTIST));
+                    int artist_id = cursor.getInt(cursor
+                            .getColumnIndex(MediaStore.Audio.Media.ARTIST_ID));
+
+                    msg.insert(0, "song name "+fullpath + "\n");
+                    light_text.setText(msg);
+                    light_text.invalidate();
+                    counter++;
+
+                } while (cursor.moveToNext());
+
+            }
+            //cursor.close();
+            playMusic();
+
+        }
     }
     public boolean externalMemoryAvailable() {
         if (Environment.isExternalStorageRemovable()) {
@@ -144,7 +201,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
             return state.equals(Environment.MEDIA_MOUNTED) || state.equals(
                     Environment.MEDIA_MOUNTED_READ_ONLY);
         } else {
-            Toast.makeText(getApplicationContext(),"Keine SD Card gefunden!", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(getApplicationContext(),"Keine SD Card gefunden!", Toast.LENGTH_SHORT).show();
             //device not support sd card.
             return false;
        }
@@ -204,11 +261,12 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
         //mpMusic = MediaPlayer.create(this, resID[changer]);
         long id = changer;
         Uri contentUri;
-        if(isSDPresent){contentUri = ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);}
-        else{contentUri = ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI, id);}
+//        if(isSDPresent){contentUri = ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);}
+//        else{contentUri = ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI, id);}
         cursor.moveToPosition(changer-1);
 //        int musicColumn = cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC);
         int artistColumn = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media.ARTIST);
+        String fullpath = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.DATA));
         int durationColumn = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media.DURATION);
         int titleColumn = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media.TITLE);
         int idColumn = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media._ID);
@@ -222,9 +280,17 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
         output=changer+"/"+counter+" Artist: " + cursor.getString(artistColumn) + " Title: " + cursor.getString(titleColumn) + " " + timeMinutes+":"+String.format("%02d",timeSeconds);
 
         try {
+            //String path = contentUri.getPath();
+            //msg.insert(0, "path: "+fullpath + "\n");
+            //light_text.setText(msg);
+            //light_text.invalidate();
+
             mpMusic = new MediaPlayer();
             mpMusic.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            mpMusic.setDataSource(getApplicationContext(), contentUri);
+//            mpMusic.setDataSource(getApplicationContext(), contentUri);
+            FileInputStream is = new FileInputStream(fullpath);
+            mpMusic.setDataSource(is.getFD());
+
             mpMusic.prepare();
             mpMusic.start();
 
@@ -252,13 +318,43 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
 
             @Override
             public boolean onError(MediaPlayer mp, int what, int extra) {
-                Toast.makeText(MainActivity.this, "Errror: "+String.valueOf(output), Toast.LENGTH_SHORT).show();
+                //Toast.makeText(MainActivity.this, "Error: "+String.valueOf(output), Toast.LENGTH_SHORT).show();
                 return false;
 
             }
         });
-                mpMusic.start();
 
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+//            int hasWritePermission = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            int hasReadPermission = checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE);
+  //          int hasCameraPermission = checkSelfPermission(Manifest.permission.CAMERA);
+
+            List<String> permissions = new ArrayList<String>();
+    /*        if (hasWritePermission != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+
+            }*/
+
+            if (hasReadPermission != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+
+            }
+/*
+            if (hasCameraPermission != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.CAMERA);
+
+            }*/
+            if (!permissions.isEmpty()) {
+                requestPermissions(permissions.toArray(new String[permissions.size()]), 111);
+            }
+        }
     }
 
    @Override
@@ -294,6 +390,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Sens
     }
 
     public void onSensorChanged(SensorEvent event) {
+        StringBuilder msg = new StringBuilder(2048);
         msg.insert(0, "Lightsensor: " + event.values[0] + " SI lux\n");
         light_text.setText(msg);
         light_text.invalidate();
